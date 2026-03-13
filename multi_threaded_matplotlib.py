@@ -15,7 +15,7 @@ PORT = "COM3"
 BAUD = 115200
 TIMEOUT = 0.005
 
-WINDOW_SIZE = 300
+WINDOW_SIZE = 200
 LOGGING_SIZE_MAX = 200 # 200 Elements max = log every 20 seconds
 PLOT_INTERVAL_ms = 150   # ms
 
@@ -94,10 +94,19 @@ y_axises = [
     'Mixture Turbidity (NTU)'
 ]
 
+units = [
+    '(mL/s)',
+    '(mL/s)',
+    '(mL/s)',
+    '(pH)',
+    '(ppm)',
+    '(NTU)'
+]
+
 for p, t, y in zip(plots, titles, y_axises):
     p.clear()
     p.set_title(t)
-    p.set_xlabel("Time")
+    p.set_xlabel("Time(s)")
     p.set_ylabel(y)
     p.grid(True)
 
@@ -107,6 +116,17 @@ glucose_line, = glucose_plot.plot([],[], "-o", markersize=2)
 ph_line, = ph_plot.plot([],[], "-o", markersize=2)
 tds_line, = tds_plot.plot([],[], "-o", markersize=2)
 turb_line, = turb_plot.plot([],[], "-o", markersize=2)
+
+value_texts = []
+for plot in plots:
+    txt = plot.text(
+        0.02, 0.95, "",
+        transform=plot.transAxes,
+        verticalalignment='top',
+        fontsize=9,
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.7)
+    )
+    value_texts.append(txt)
 
 lines = [
     water_line,
@@ -194,9 +214,11 @@ def animate(frame):
         plot.relim()
         plot.autoscale_view(scalex=False, scaley=True)
 
-    # print(f"xdata: {list(x_data_deque)}")
-    # print(f"xdata: {list(water_flow_deque)}")
-    return lines
+    for txt, data_deque, unit in zip(value_texts, deques[1:], units):
+        if data_deque:
+            txt.set_text(f"{data_deque[-1]:.2f} {unit}")
+
+    return lines + value_texts
 
 
 # ======================
