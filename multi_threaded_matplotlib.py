@@ -7,6 +7,7 @@ import matplotlib.animation as animation
 import serial
 import time
 import csv
+from pathlib import Path
 # ======================
 # CONFIG
 # ======================
@@ -14,7 +15,7 @@ PORT = "COM3"
 BAUD = 115200
 TIMEOUT = 0.005
 
-WINDOW_SIZE = 100
+WINDOW_SIZE = 300
 LOGGING_SIZE_MAX = 200 # 200 Elements max = log every 20 seconds
 PLOT_INTERVAL_ms = 150   # ms
 
@@ -35,10 +36,20 @@ mixture_turbidity_deque = deque(maxlen=WINDOW_SIZE)
 gui_packet_queue = Queue(maxsize=WINDOW_SIZE)
 
 # Log Queue & Log Variables
-log_header = ['Time(s)', 'electrolyte_flow', 'glucose_flow', 'mixture_ph', 'mixture_tds', 'mixture_turbidity']
+log_header = [
+    'Time (s)',
+    'Electrolyte Flow (mL/s)',
+    'Glucose Flow (mL/s)',
+    'Mixture pH',
+    'Mixture TDS (ppm)',
+    'Mixture Turbidity (NTU)'
+]
 log_buffer = [] #basically a queue, but csv module wants it as a list
 first_log = True
 log_number = 0
+logs_dir = Path("logs")
+logs_dir.mkdir(exist_ok=True)
+
 # ======================
 # SERIAL
 # ======================
@@ -66,19 +77,28 @@ plots = [
 ]
 
 titles = [
-    "Water Flow",
-    "Electrolyte Flow",
-    "Glucose Flow",
-    "Mixture pH",
-    "Mixture TDS",
-    "Mixture Turbidity"
+    "Water Flow vs Time",
+    "Electrolyte Flow vs Time",
+    "Glucose Flow vs Time",
+    "Mixture pH vs Time",
+    "Mixture TDS vs Time",
+    "Mixture Turbidity vs Time"
 ]
 
-for p, t in zip(plots, titles):
+y_axises = [
+    'Water Flow (mL/s)',
+    'Electrolyte Flow (mL/s)',
+    'Glucose Flow (mL/s)',
+    'Mixture pH',
+    'Mixture TDS (ppm)',
+    'Mixture Turbidity (NTU)'
+]
+
+for p, t, y in zip(plots, titles, y_axises):
     p.clear()
     p.set_title(t)
     p.set_xlabel("Time")
-    p.set_ylabel("Value")
+    p.set_ylabel(y)
     p.grid(True)
 
 water_line, = water_plot.plot([],[], "-o", markersize=2)
@@ -174,8 +194,8 @@ def animate(frame):
         plot.relim()
         plot.autoscale_view(scalex=False, scaley=True)
 
-    print(f"xdata: {list(x_data_deque)}")
-    print(f"xdata: {list(water_flow_deque)}")
+    # print(f"xdata: {list(x_data_deque)}")
+    # print(f"xdata: {list(water_flow_deque)}")
     return lines
 
 
@@ -187,11 +207,11 @@ def log():
     global log_number
     global first_log
     if first_log:
-        while os.path.exists(f"Flow-Sim-Data-Log-{log_number}.csv"):
+        while os.path.exists(f"{logs_dir}/Flow-Sim-Data-Log-{log_number}.csv"):
             log_number += 1
         first_log = False
 
-    log_file = f"Flow-Sim-Data-Log-{log_number}.csv"
+    log_file = f"{logs_dir}/Flow-Sim-Data-Log-{log_number}.csv"
     file_exists = os.path.exists(log_file)
     with open(log_file, "a", newline="") as f:
         writer = csv.writer(f)
