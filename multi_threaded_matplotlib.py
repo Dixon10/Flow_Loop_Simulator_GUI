@@ -15,8 +15,8 @@ BAUD = 115200
 TIMEOUT = 0.005
 
 WINDOW_SIZE = 100
-LOGGING_SIZE = 200 # Log Every 20 Seconds
-PLOT_INTERVAL = 120   # ms
+LOGGING_SIZE_MAX = 200 # 200 Elements max = log every 20 seconds
+PLOT_INTERVAL_ms = 150   # ms
 
 # ======================
 # BUFFERS
@@ -31,18 +31,12 @@ mixture_ph_deque = deque(maxlen=WINDOW_SIZE)
 mixture_tds_deque = deque(maxlen=WINDOW_SIZE)
 mixture_turbidity_deque = deque(maxlen=WINDOW_SIZE)
 
-#Queues
-x_data_queue = Queue(maxsize=WINDOW_SIZE)
+# GUI Queue
+gui_packet_queue = Queue(maxsize=WINDOW_SIZE)
 
-water_flow_queue = Queue(maxsize=WINDOW_SIZE)
-electrolyte_flow_queue = Queue(maxsize=WINDOW_SIZE)
-glucose_flow_queue = Queue(maxsize=WINDOW_SIZE)
-mixture_ph_queue = Queue(maxsize=WINDOW_SIZE)
-mixture_tds_queue = Queue(maxsize=WINDOW_SIZE)
-mixture_turbidity_queue = Queue(maxsize=WINDOW_SIZE)
-
+# Log Queue & Log Variables
 log_header = ['Time(s)', 'electrolyte_flow', 'glucose_flow', 'mixture_ph', 'mixture_tds', 'mixture_turbidity']
-log_buffer = []
+log_buffer = [] #basically a queue, but csv module wants it as a list
 first_log = True
 log_number = 0
 # ======================
@@ -103,16 +97,8 @@ lines = [
     turb_line
 ]
 
-queues = [
-    water_flow_queue,
-    electrolyte_flow_queue,
-    glucose_flow_queue,
-    mixture_ph_queue,
-    mixture_tds_queue,
-    mixture_turbidity_queue
-]
-
 deques = [
+    x_data_deque,
     water_flow_deque,
     electrolyte_flow_deque,
     glucose_flow_deque,
@@ -146,19 +132,11 @@ def serial_worker():
                 micro_offset_start_time = vals[0]
             vals[0] = (vals[0] - micro_offset_start_time)/1000
 
-            if not x_data_queue.full():
-                x_data_queue.put(vals[0])
-                water_flow_queue.put(vals[1])
-                electrolyte_flow_queue.put(vals[2])
-                glucose_flow_queue.put(vals[3])
-                mixture_ph_queue.put(vals[4])
-                mixture_tds_queue.put(vals[5])
-                mixture_turbidity_queue.put(vals[6])
-
-            if x_data_queue.full():
-                print("error")
+            if not gui_packet_queue.full():
+                gui_packet_queue.put(vals)
+            
             log_buffer.append(vals)
-            if len(log_buffer) > 0.95 * LOGGING_SIZE:
+            if len(log_buffer) > 0.95 * LOGGING_SIZE_MAX:
                 threading.Thread(target=log).start()
         except Exception as e:
             print("parse error:", e)
@@ -170,20 +148,20 @@ def serial_worker():
 def animate(frame):
     #print("bytes waiting:", ser.in_waiting)
 
-    #no new data, just return
-    if x_data_queue.empty():
+    #no new flow sim data, just return
+    if gui_packet_queue.empty():
         return lines
-    else:
-        while not x_data_queue.empty():
-            x_data_deque.append(x_data_queue.get())
 
     # remove all queue elements to add to dequeue for moving window
-    for queue, deque in zip(queues, deques):
-        while not queue.empty():
-            deque.append(queue.get())
+    while not gui_packet_queue.empty():
+        packet = gui_packet_queue.get()
+        i = 0
+        for deque in deques:
+            deque.append(packet[i])
+            i += 1
 
-    for line, deque in zip(lines, deques):
-        line.set_data(x_data_deque, deque)
+    for line, data_deque in zip(lines, deques[1:]):
+        line.set_data(x_data_deque, data_deque)
 
     xmin = x_data_deque[0]
     xmax = x_data_deque[-1]
@@ -238,7 +216,7 @@ thread.start()
 ani = animation.FuncAnimation(
     fig,
     animate,
-    interval=PLOT_INTERVAL,
+    interval=PLOT_INTERVAL_ms,
     blit=False,
     cache_frame_data=False
 )
